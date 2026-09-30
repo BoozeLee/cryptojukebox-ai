@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+*.audio
+*.mp3
+*.wav
+*.m4a
+*.ogg
+.superpowers/
