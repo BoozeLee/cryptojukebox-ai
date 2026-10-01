@@ -2,16 +2,16 @@ import type { AudioFeatures } from '../domain/features';
 
 export const MAX_AUDIO_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 
-const supportedAudioTypes = new Set([
-  'audio/wav',
-  'audio/x-wav',
-  'audio/mpeg',
-  'audio/ogg',
-  'audio/mp4',
-  'audio/webm',
+const supportedAudioTypesByExtension = new Map<string, ReadonlySet<string>>([
+  ['.wav', new Set(['audio/wav', 'audio/x-wav'])],
+  ['.mp3', new Set(['audio/mpeg'])],
+  ['.ogg', new Set(['audio/ogg'])],
+  ['.m4a', new Set(['audio/mp4'])],
+  ['.webm', new Set(['audio/webm'])],
 ]);
 
 export interface LocalAudioFile {
+  name: string;
   size: number;
   type: string;
 }
@@ -46,7 +46,10 @@ export function validateLocalAudioFile(file: LocalAudioFile): void {
     throw new AudioInputError('Choose an audio file smaller than 50 MiB.');
   }
 
-  if (!supportedAudioTypes.has(file.type.toLowerCase())) {
+  const extension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0];
+  const supportedTypes = extension ? supportedAudioTypesByExtension.get(extension) : undefined;
+
+  if (!supportedTypes || !supportedTypes.has(file.type.toLowerCase())) {
     throw new AudioInputError('Choose a supported audio file type.');
   }
 }
@@ -88,18 +91,21 @@ export async function decodeAndExtractAudioFeatures(
     throw new AudioInputError('The selected audio file could not be read.');
   }
 
-  let decodedAudio: DecodedAudioBuffer;
   try {
-    decodedAudio = await decoder.decodeAudioData(encodedAudio);
-  } catch {
+    const decodedAudio = await decoder.decodeAudioData(encodedAudio);
+
+    if (!Number.isInteger(decodedAudio.numberOfChannels) || decodedAudio.numberOfChannels < 1) {
+      throw new AudioInputError('Decoded audio contains no channels.');
+    }
+
+    return extractAudioFeatures(decodedAudio.getChannelData(0), decodedAudio.sampleRate);
+  } catch (error) {
+    if (error instanceof AudioInputError) {
+      throw error;
+    }
+
     throw new AudioInputError('The selected audio file could not be decoded.');
   }
-
-  if (decodedAudio.numberOfChannels < 1) {
-    throw new AudioInputError('Decoded audio contains no channels.');
-  }
-
-  return extractAudioFeatures(decodedAudio.getChannelData(0), decodedAudio.sampleRate);
 }
 
 function rootMeanSquare(samples: Float32Array): number {
