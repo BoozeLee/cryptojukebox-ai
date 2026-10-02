@@ -20,6 +20,14 @@ function downloadArtifact(contents: string, filename: string, type: string): voi
   URL.revokeObjectURL(url);
 }
 
+async function closeAudioContext(audioContext: AudioContext): Promise<void> {
+  try {
+    await audioContext.close();
+  } catch (error) {
+    console.error('Unable to release audio processing resources.', error);
+  }
+}
+
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [analysisState, setAnalysisState] = useState<AnalysisState>('idle');
@@ -45,9 +53,10 @@ function App() {
     setErrorMessage('');
     setIntake(null);
 
-    const audioContext = new AudioContext();
+    let audioContext: AudioContext | undefined;
 
     try {
+      audioContext = new AudioContext();
       const features = await decodeAndExtractAudioFeatures(file, audioContext);
       setIntake(mapFeaturesToIntake(features));
       setAnalysisState('ready');
@@ -59,7 +68,9 @@ function App() {
           : 'The selected file could not be analyzed in this browser.',
       );
     } finally {
-      await audioContext.close();
+      if (audioContext) {
+        await closeAudioContext(audioContext);
+      }
     }
   }
 
